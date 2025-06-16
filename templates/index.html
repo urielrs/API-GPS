@@ -1,0 +1,651 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Ruta Manhattan</title>
+  <link rel="stylesheet" href="https://api.mqcdn.com/sdk/mapquest-js/v1.3.2/mapquest.css">
+  <script src="https://api.mqcdn.com/sdk/mapquest-js/v1.3.2/mapquest.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+  <style>
+    body, html {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      font-family: Arial, sans-serif;
+      overflow: hidden; /* Evita scrollbar al mover el panel lateral */
+    }
+    #map {
+      height: 100%;
+      width: 100%;
+    }
+
+    /* Nuevo: Botón burbuja para abrir el menú */
+    #menu-bubble-button {
+      position: fixed; /* Fijo en la pantalla */
+      top: 20px;
+      left: 20px;
+      background: #FF8C00; /* Naranja oscuro */
+      color: white;
+      border: none;
+      border-radius: 50%; /* Forma de burbuja */
+      width: 50px;
+      height: 50px;
+      font-size: 1.5em;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      cursor: pointer;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+      z-index: 1001; /* Asegura que esté por encima de todo */
+      transition: background 0.3s, transform 0.3s;
+    }
+    #menu-bubble-button:hover {
+      background: #FF6347; /* Naranja rojizo al pasar el ratón */
+      transform: scale(1.05);
+    }
+
+    /* Nuevo: Contenedor del panel lateral */
+    #sidebar-panel {
+      position: fixed;
+      top: 0;
+      left: -380px; /* Inicialmente fuera de la pantalla */
+      height: 100%;
+      width: 350px; /* Ancho del panel */
+      background: rgba(255, 255, 255, 0.98); /* Fondo casi opaco */
+      box-shadow: 2px 0 15px rgba(0, 0, 0, 0.3);
+      z-index: 1000;
+      transition: left 0.4s ease-in-out; /* Animación de desplazamiento */
+      padding: 20px;
+      box-sizing: border-box; /* Incluye padding en el ancho */
+      overflow-y: auto; /* Para scroll si el contenido es largo */
+    }
+
+    #sidebar-panel.open {
+      left: 0; /* Desliza hacia adentro */
+    }
+
+    /* Estilos del formulario dentro del panel */
+    #form-content {
+      padding-top: 50px; /* Espacio para que no se superponga con el botón de cierre */
+    }
+
+    h3 {
+      color: #FF8C00; /* Naranja para el título */
+      margin-top: 0;
+    }
+
+    input, button {
+      padding: 10px;
+      margin: 8px 0;
+      width: 100%;
+      box-sizing: border-box;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+    }
+    
+    button {
+      background: #FF8C00; /* Naranja principal para botones */
+      color: white;
+      font-weight: bold;
+      cursor: pointer;
+      transition: background 0.3s;
+    }
+    button:hover {
+      background: #FF6347; /* Naranja rojizo al pasar el ratón */
+    }
+    #resultado {
+      margin-top: 15px;
+      max-height: 400px;
+      overflow-y: auto;
+      font-size: 0.9em;
+    }
+    .error {
+      color: #D32F2F; /* Rojo para errores */
+      background: #FFEBEB;
+      padding: 10px;
+      border-radius: 4px;
+      border-left: 4px solid #D32F2F;
+    }
+    .info-message {
+      color: #01579B;
+      background: #E0F2F7;
+      padding: 10px;
+      border-radius: 4px;
+      border-left: 4px solid #01579B;
+    }
+    .loading {
+      color: #FF8C00; /* Naranja para mensaje de carga */
+      font-style: italic;
+    }
+    .format-hint {
+      font-size: 0.8em;
+      color: #666;
+      margin-top: -5px;
+      margin-bottom: 10px;
+    }
+    .mode-selector {
+      display: flex;
+      margin-bottom: 10px;
+    }
+    .mode-selector button {
+      flex: 1;
+      padding: 8px;
+      background: #F0F0F0;
+      color: #333;
+      border: 1px solid #DDD;
+      border-radius: 4px;
+      margin: 0 2px;
+    }
+    .mode-selector button.active {
+      background: #FF8C00; /* Naranja para botón activo */
+      color: white;
+    }
+
+    .travel-mode-buttons {
+      display: flex;
+      justify-content: space-around;
+      margin-bottom: 15px;
+      border: 1px solid #DDD;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .travel-mode-buttons button {
+      flex: 1;
+      background: #F8F8F8;
+      color: #555;
+      padding: 12px 5px;
+      border: none;
+      border-right: 1px solid #EEE;
+      cursor: pointer;
+      font-size: 1.1em;
+      transition: background 0.2s, color 0.2s;
+    }
+    .travel-mode-buttons button:last-child {
+      border-right: none;
+    }
+    .travel-mode-buttons button.active {
+      background: #FF8C00; /* Naranja para botón de modo de viaje activo */
+      color: white;
+    }
+    .travel-mode-buttons button:hover:not(.active) {
+      background: #E9E9E9;
+    }
+    .travel-mode-buttons button i {
+        margin-right: 5px;
+    }
+
+    /* Botón de cierre dentro del panel */
+    #close-sidebar-button {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      background: none;
+      border: none;
+      font-size: 2em;
+      color: #666;
+      cursor: pointer;
+      z-index: 1002;
+    }
+    #close-sidebar-button:hover {
+      color: #333;
+    }
+    
+    /* Estilos para los resultados */
+    #resultado h4 {
+        color: #FF8C00; /* Naranja para títulos de resultados */
+    }
+
+    /* Colores para marcadores en el mapa (ajustados para armonizar) */
+    /* Estos colores se definen en el JS con L.mapquest.icons.marker */
+    /* primaryColor: '#FF8C00' para Origen, primaryColor: '#D32F2F' para Destino */
+    /* Color de la línea de ruta: #FF8C00 para coche/moto, #00A000 para peatón */
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+
+  <button id="menu-bubble-button" onclick="toggleSidebar()">
+    <i class="fas fa-route"></i> </button>
+
+  <div id="sidebar-panel">
+    <button id="close-sidebar-button" onclick="toggleSidebar()">
+      &times; </button>
+    <div id="form-content">
+      <h3 style="margin-top: 0;">Ruta Óptima</h3>
+
+      <div class="mode-selector">
+        <button id="mode-origen" class="active" onclick="setSelectionMode('origen')">Origen</button>
+        <button id="mode-destino" onclick="setSelectionMode('destino')">Destino</button>
+      </div>
+
+      <input id="origen" placeholder="Ingresa el origen" required>
+      <input id="destino" placeholder="Ingresa el destino" required>
+      <p class="format-hint">Para coordenadas usa formato: latitud,longitud</p>
+
+      <div class="travel-mode-buttons">
+          <button id="btn-car" class="active" onclick="setTravelMode('car')"><i class="fas fa-car"></i> Automóvil</button>
+          <button id="btn-motorcycle" onclick="setTravelMode('motorcycle')"><i class="fas fa-motorcycle"></i> Motocicleta</button>
+          <button id="btn-pedestrian" onclick="setTravelMode('pedestrian')"><i class="fas fa-walking"></i> Caminando</button>
+      </div>
+
+      <button onclick="calcularRuta()">Calcular Ruta</button>
+      <div id="resultado"></div>
+    </div>
+  </div>
+
+  <script>
+    // 1. Variables globales
+    let map;
+    let currentRouteLayer = null;
+    let selectionMode = 'origen'; // 'origen' o 'destino'
+    let travelMode = 'car'; // 'car', 'motorcycle', 'pedestrian' - DEFAULT
+    let origenMarker = null; // Marcador para el punto de inicio de la ruta (ajustado por MQ)
+    let destinoMarker = null; // Marcador para el punto de fin de la ruta (ajustado por MQ)
+
+    // NUEVAS VARIABLES PARA MOSTRAR EL PUNTO DE CLIC ORIGINAL
+    let originalClickOrigenMarker = null; // Marcador para el punto de clic original del origen (Enfoque 1)
+    let originalClickDestinoMarker = null; // Marcador para el punto de clic original del destino (Enfoque 1)
+    let connectingLineOrigen = null; // Línea que conecta el clic original con el inicio de ruta real (Enfoque 2)
+    let connectingLineDestino = null; // Línea que conecta el clic original con el fin de ruta real (Enfoque 2)
+    let originalClickOrigenLatLng = null; // Para guardar las coordenadas del clic de origen (para la línea)
+    let originalClickDestinoLatLng = null; // Para guardar las coordenadas del clic de destino (para la línea)
+
+
+    // 2. Inicialización del mapa
+    function initMap() {
+      try {
+        // Verificar que la API Key está disponible
+        // Asegúrate de que el backend está pasando la clave a la plantilla (revisa el código Flask)
+        const apiKey = '{{ mapquest_key | tojson }}'; // Esto debe venir del backend Flask
+
+        // IMPORTANTE: Si la clave no se carga, el tojson la convertirá en "null" si es None.
+        // Debemos parsearla como JSON para que sea un string o null.
+        const parsedApiKey = JSON.parse(apiKey);
+
+        if (!parsedApiKey || parsedApiKey === 'YOUR_MAPQUEST_KEY_HERE') { // También verifica si es el placeholder
+          throw new Error('API Key de MapQuest no configurada correctamente.');
+        }
+
+        // Configurar MapQuest
+        L.mapquest.key = parsedApiKey;
+
+        // Crear mapa
+        map = L.mapquest.map('map', {
+          center: [19.4326, -99.1332], // Centro inicial en Ciudad de México
+          layers: L.mapquest.tileLayer('map'),
+          zoom: 12
+        });
+
+        // Añadir controles
+        map.addControl(L.mapquest.control({ position: 'bottomright' }));
+
+        // Manejar clics en el mapa
+        map.on('click', function(e) {
+          const latLng = e.latlng;
+          const coords = `${latLng.lat.toFixed(6)},${latLng.lng.toFixed(6)}`;
+
+          if (selectionMode === 'origen') {
+            document.getElementById('origen').value = coords;
+            originalClickOrigenLatLng = latLng; // Guardar para la línea de conexión
+
+            // Enfoque 1: Dibujar un marcador temporal para el clic original del origen
+            if (originalClickOrigenMarker) {
+                map.removeLayer(originalClickOrigenMarker);
+            }
+            originalClickOrigenMarker = L.marker(latLng, {
+                icon: L.mapquest.icons.marker({
+                    primaryColor: '#888888', // Un color más tenue o diferente
+                    secondaryColor: '#888888',
+                    shadow: false,
+                    size: 'sm', // Más pequeño
+                    symbol: '' // Puedes dejarlo vacío o usar un símbolo personalizado
+                })
+            }).addTo(map).bindPopup("Punto de clic de origen");
+
+          } else { // selectionMode === 'destino'
+            document.getElementById('destino').value = coords;
+            originalClickDestinoLatLng = latLng; // Guardar para la línea de conexión
+
+            // Enfoque 1: Dibujar un marcador temporal para el clic original del destino
+            if (originalClickDestinoMarker) {
+                map.removeLayer(originalClickDestinoMarker);
+            }
+            originalClickDestinoMarker = L.marker(latLng, {
+                icon: L.mapquest.icons.marker({
+                    primaryColor: '#888888',
+                    secondaryColor: '#888888',
+                    shadow: false,
+                    size: 'sm',
+                    symbol: ''
+                })
+            }).addTo(map).bindPopup("Punto de clic de destino");
+          }
+        });
+
+      } catch (error) {
+        console.error('Error al inicializar el mapa:', error);
+        document.getElementById('map').innerHTML = `
+          <div style="padding: 20px; color: white; background: #d32f2f;">
+            <h3>Error de configuración del mapa</h3>
+            <p>${error.message}</p>
+            <p>Asegúrate de que tu API Key de MapQuest está configurada correctamente.</p>
+            <p>Verifica si tienes un bloqueador de anuncios activo.</p>
+          </div>
+        `;
+      }
+    }
+
+    // Función para cambiar el modo de selección (Origen/Destino)
+    function setSelectionMode(mode) {
+      selectionMode = mode;
+      document.getElementById('mode-origen').classList.toggle('active', mode === 'origen');
+      document.getElementById('mode-destino').classList.toggle('active', mode === 'destino');
+    }
+
+    // Función para cambiar el modo de viaje (Coche/Moto/Caminando)
+    function setTravelMode(mode) {
+      travelMode = mode;
+      // Actualizar clases de los botones para resaltado visual
+      document.getElementById('btn-car').classList.toggle('active', mode === 'car');
+      document.getElementById('btn-motorcycle').classList.toggle('active', mode === 'motorcycle');
+      document.getElementById('btn-pedestrian').classList.toggle('active', mode === 'pedestrian');
+    }
+
+    // Actualizar marcador de origen (punto de inicio de la ruta real de MapQuest)
+    function updateOrigenMarker(latLng) {
+      if (origenMarker) {
+        map.removeLayer(origenMarker);
+      }
+
+      origenMarker = L.marker(latLng, {
+        icon: L.mapquest.icons.marker({
+          primaryColor: '#0000FF', // Naranja para origen
+          secondaryColor: '#0000FF',
+          shadow: true,
+          size: 'md',
+          symbol: 'A'
+        })
+      }).addTo(map).bindPopup("Punto de origen (ajustado)");
+    }
+
+    // Actualizar marcador de destino (punto de fin de la ruta real de MapQuest)
+    function updateDestinoMarker(latLng) {
+      if (destinoMarker) {
+        map.removeLayer(destinoMarker);
+      }
+
+      destinoMarker = L.marker(latLng, {
+        icon: L.mapquest.icons.marker({
+          primaryColor: '#D32F2F', // Rojo para destino
+          secondaryColor: '#D32F2F',
+          shadow: true,
+          size: 'md',
+          symbol: 'B'
+        })
+      }).addTo(map).bindPopup("Punto de destino (ajustado)");
+    }
+
+    // 3. Función para validar si es una coordenada (se mantiene igual, no es necesario cambiarla)
+    function isCoordinate(value) {
+      const regexCoordenadas = /^-?\d{1,3}\.\d+\s*,\s*-?\d{1,3}\.\d+$/;
+      return regexCoordenadas.test(value.trim());
+    }
+
+    // 4. Función principal para calcular rutas
+    async function calcularRuta() {
+      const origenInput = document.getElementById('origen').value.trim();
+      const destinoInput = document.getElementById('destino').value.trim();
+      const resultadoDiv = document.getElementById('resultado');
+
+      // Limpiar resultados anteriores inmediatamente
+      resultadoDiv.innerHTML = '';
+      limpiarRuta(); // Limpiar ruta y elementos visuales anteriores (marcadores, líneas, ruta)
+
+      // Validación básica
+      if (!origenInput || !destinoInput) {
+        resultadoDiv.innerHTML = '<p class="error">Por favor ingresa origen y destino.</p>';
+        return;
+      }
+
+      // **** NUEVA VALIDACIÓN: Origen y Destino son idénticos ****
+      if (origenInput === destinoInput) {
+        resultadoDiv.innerHTML = `
+          <div class="info-message">
+            <h4 style="color: #FF8C00; margin-top: 0;">¡Ya estás en tu destino!</h4>
+            <p>El origen y el destino son el mismo punto (${origenInput}).</p>
+            <p>Distancia: 0 km, Tiempo: 0 minutos.</p>
+          </div>
+        `;
+        return; // Detener la ejecución
+      }
+      // **********************************************************
+
+      resultadoDiv.innerHTML = '<p class="loading">Obteniendo ruta...</p>';
+
+      try {
+        // Determinar el routeType para MapQuest según el travelMode seleccionado
+        let mqRouteType;
+        if (travelMode === 'car' || travelMode === 'motorcycle') {
+          mqRouteType = 'fastest'; // MapQuest usa 'fastest' para vehículos motorizados por defecto
+        } else if (travelMode === 'pedestrian') {
+          mqRouteType = 'pedestrian'; // Para rutas a pie
+        } else {
+          mqRouteType = 'fastest'; // Fallback por si acaso
+        }
+
+
+        const response = await fetch('/ruta', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            origen: origenInput,
+            destino: destinoInput,
+            routeType: mqRouteType // Enviar el tipo de ruta al backend
+          })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error || 'Error al obtener la ruta');
+        }
+
+        if (!data.shape || data.shape.length === 0) {
+          // Si es peatón y no hay ruta, podría ser una distancia muy corta que no genera forma
+          if (travelMode === 'pedestrian' && data.distance_km < 0.1) { // Menos de 100 metros
+            // Mostrar resultados para caminata muy corta sin ruta compleja
+            mostrarResultados(data);
+            return;
+          }
+          throw new Error('Datos incorrectos o la ruta es demasiado corta para dibujar.');
+        }
+
+        // Mostrar resultados y dibujar ruta
+        mostrarResultados(data);
+        dibujarRuta(data.shape, data.start_lat_lng, data.end_lat_lng);
+
+      } catch (error) {
+        console.error('Error:', error);
+        resultadoDiv.innerHTML = `
+          <div class="error">
+            <strong>¡Ooops! Error:</strong> ${error.message}<br><br>
+            <small>Recomendaciones:</small>
+            <ul style="margin-top: 5px; padding-left: 20px;">
+              <li>Verifica que las ubicaciones existen</li>
+              <li>Para coordenadas usa formato exacto: latitud,longitud</li>
+              <li>Latitud debe estar entre -90 y 90</li>
+              <li>Longitud debe estar entre -180 y 180</li>
+            </ul>
+          </div>
+        `;
+      }
+    }
+
+    // 5. Dibujar ruta en el mapa
+    function dibujarRuta(shapePoints, startLatLng, endLatLng) {
+      if (!map) return;
+
+      try {
+        // Convertir puntos a formato LatLng
+        const latLngs = [];
+        for (let i = 0; i < shapePoints.length; i += 2) {
+          latLngs.push([shapePoints[i], shapePoints[i+1]]);
+        }
+
+        // Crear capa de ruta
+        currentRouteLayer = L.polyline(latLngs, {
+          color: (travelMode === 'pedestrian' ? '#0000FF' : '#0000FF'), // Naranja para coche/moto, Verde para peatón
+          weight: (travelMode === 'pedestrian' ? 4 : 5), // Grosor diferente para peatón
+          opacity: 0.7,
+          smoothFactor: 1
+        }).addTo(map);
+
+        // Ajustar vista a la ruta
+        map.fitBounds(currentRouteLayer.getBounds(), { padding: [50, 50] });
+
+        // Asegurarnos de que los marcadores de origen y destino usen las coordenadas reales de la ruta
+        const realStartLatLng = L.latLng(startLatLng[0], startLatLng[1]);
+        const realEndLatLng = L.latLng(endLatLng[0], endLatLng[1]);
+        updateOrigenMarker(realStartLatLng);
+        updateDestinoMarker(realEndLatLng);
+
+        // Enfoque 1: Eliminar los marcadores de clic originales una vez que la ruta se dibuja
+        if (originalClickOrigenMarker) {
+            map.removeLayer(originalClickOrigenMarker);
+            originalClickOrigenMarker = null;
+        }
+        if (originalClickDestinoMarker) {
+            map.removeLayer(originalClickDestinoMarker);
+            originalClickDestinoMarker = null;
+        }
+
+        // Enfoque 2: Dibujar línea desde el clic original al punto de inicio real de la ruta
+        if (originalClickOrigenLatLng && !originalClickOrigenLatLng.equals(realStartLatLng)) {
+            connectingLineOrigen = L.polyline([originalClickOrigenLatLng, realStartLatLng], {
+                color: '#888888', // Color gris para la línea de conexión
+                weight: 2,
+                opacity: 0.6,
+                dashArray: '5, 10' // Línea punteada
+            }).addTo(map);
+        }
+
+        // Enfoque 2: Dibujar línea desde el clic original al punto final real de la ruta
+        if (originalClickDestinoLatLng && !originalClickDestinoLatLng.equals(realEndLatLng)) {
+            connectingLineDestino = L.polyline([originalClickDestinoLatLng, realEndLatLng], {
+                color: '#888888',
+                weight: 2,
+                opacity: 0.6,
+                dashArray: '5, 10'
+            }).addTo(map);
+        }
+
+
+      } catch (error) {
+        console.error('Error al dibujar ruta:', error);
+        throw new Error('No se pudo visualizar la ruta en el mapa');
+      }
+    }
+
+    // 6. Mostrar resultados
+    function mostrarResultados(data) {
+      // **Constantes para el cálculo de gasolina y casetas (puedes ajustarlas)**
+      const precioLitroGasolinaMXN = 23.50; // Precio de la gasolina por litro en MXN (ejemplo)
+      const costoPromedioMXNPorKmCaseta = 3.50; // Costo promedio estimado por km de caseta en MXN
+
+      let rendimientoKmPorLitro;
+      let consumoLitros = 0;
+      let costoGasolinaMXN = 0;
+      let costoCasetasMXN = 0;
+
+      let fuelAndTollHtml = ''; // Para construir el HTML de consumo y casetas
+
+      if (travelMode === 'car') {
+        rendimientoKmPorLitro = 12; // Rendimiento para coche promedio
+        consumoLitros = data.distance_km / rendimientoKmPorLitro;
+        costoGasolinaMXN = consumoLitros * precioLitroGasolinaMXN;
+        costoCasetasMXN = data.toll_distance_km * costoPromedioMXNPorKmCaseta;
+
+        fuelAndTollHtml = `
+          <p><strong>Consumo de gasolina (estimado):</strong> ${consumoLitros.toFixed(2)} litros</p>
+          <p><strong>Costo de gasolina (estimado):</strong> $${costoGasolinaMXN.toFixed(2)} MXN</p>
+        `;
+      } else if (travelMode === 'motorcycle') {
+        rendimientoKmPorLitro = 25; // Rendimiento para motocicleta promedio
+        consumoLitros = data.distance_km / rendimientoKmPorLitro;
+        costoGasolinaMXN = consumoLitros * precioLitroGasolinaMXN;
+        // Las motos también pagan casetas, por lo que usamos el mismo cálculo si aplica
+        costoCasetasMXN = data.toll_distance_km * costoPromedioMXNPorKmCaseta; // Podrías tener un costo diferente para motos si fuera más preciso
+
+        fuelAndTollHtml = `
+          <p><strong>Consumo de gasolina (estimado):</strong> ${consumoLitros.toFixed(2)} litros</p>
+          <p><strong>Costo de gasolina (estimado):</strong> $${costoGasolinaMXN.toFixed(2)} MXN</p>
+        `;
+      }
+      // Para 'pedestrian' (caminando), fuelAndTollHtml se queda vacío, no se muestran consumos ni casetas.
+
+      document.getElementById('resultado').innerHTML = `
+        <div style="border-top: 1px solid #eee; padding-top: 10px;">
+          <h4 style="margin-bottom: 10px; color: #FF8C00;">Resultados (${travelMode === 'car' ? 'Automóvil' : travelMode === 'motorcycle' ? 'Motocicleta' : 'Caminando'}):</h4>
+          <p><strong>Distancia real:</strong> ${data.distance_km} km</p>
+          <p><strong>Tiempo estimado:</strong> ${data.time_minutes.toFixed(1)} minutos</p>
+          ${fuelAndTollHtml} </div>
+        <div style="margin-top: 15px;">
+          <h4 style="margin-bottom: 5px; color: #FF8C00;">Indicaciones:</h4>
+          <ol style="margin-top: 5px; padding-left: 20px;">
+            ${data.directions.map(d => `<li style="margin-bottom: 5px;">${d}</li>`).join('')}
+          </ol>
+        </div>
+      `;
+    }
+
+    // 7. Limpiar ruta y todos los elementos visuales relacionados
+    function limpiarRuta() {
+      if (currentRouteLayer && map) {
+        map.removeLayer(currentRouteLayer);
+        currentRouteLayer = null;
+      }
+      // Limpiar marcadores de clic originales
+      if (originalClickOrigenMarker) {
+        map.removeLayer(originalClickOrigenMarker);
+        originalClickOrigenMarker = null;
+      }
+      if (originalClickDestinoMarker) {
+        map.removeLayer(originalClickDestinoMarker);
+        originalClickDestinoMarker = null;
+      }
+      // Limpiar líneas de conexión
+      if (connectingLineOrigen) {
+        map.removeLayer(connectingLineOrigen);
+        connectingLineOrigen = null;
+      }
+      if (connectingLineDestino) {
+        map.removeLayer(connectingLineDestino);
+        connectingLineDestino = null;
+      }
+      // También resetear las coordenadas guardadas de los clics originales
+      originalClickOrigenLatLng = null;
+      originalClickDestinoLatLng = null;
+
+      // Limpiar marcadores de ruta A y B
+      if (origenMarker) {
+        map.removeLayer(origenMarker);
+        origenMarker = null;
+      }
+      if (destinoMarker) {
+        map.removeLayer(destinoMarker);
+        destinoMarker = null;
+      }
+    }
+
+    // NUEVA FUNCIÓN: Para alternar la visibilidad del panel lateral
+    function toggleSidebar() {
+      const sidebar = document.getElementById('sidebar-panel');
+      sidebar.classList.toggle('open');
+    }
+
+
+    // Inicializar al cargar la página
+    document.addEventListener('DOMContentLoaded', initMap);
+  </script>
+</body>
+</html>
